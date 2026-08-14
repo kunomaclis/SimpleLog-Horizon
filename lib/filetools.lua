@@ -4,7 +4,7 @@ local CreateDirectories = function(path)
         if (path:byte(c) == backSlash) then
             local directory = string.sub(path,1,c);            
             if (ashita.fs.create_directory(directory) == false) then
-                gFunc.Error('Failed to create directory: ' .. directory);
+                gFuncs.Error('Failed to create directory: ' .. directory);
                 return false;
             end
         end
