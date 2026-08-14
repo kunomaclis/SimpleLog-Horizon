@@ -467,9 +467,9 @@ ui.render_config = function(toggle)
 
                         if (not ashita.fs.exists(jobFiltersFile)) then
 			                local sourceFile = ('%saddons\\simplelog\\filters.lua'):fmt(AshitaCore:GetInstallPath());
-                            gFileTools.CopyFile(sourceFile, jobFiltersFile, false);
+                            gFileTools.OverwriteProfile(jobFiltersFile, sourceFile);
                             print(chat.header('SimpleLog') .. chat.message('Created filters profile: ') .. chat.color1(2, shortFileName));
-                            gStatus.LoadFilters();
+                            gStatus.LoadProfile(jobFiltersFile, 'filters');
                         elseif (ashita.fs.exists(jobFiltersFile)) then
                             imgui.OpenPopup('###file_man')
                         end
@@ -499,10 +499,10 @@ ui.render_config = function(toggle)
                             local jobFiltersFile = (gStatus.SettingsFolder .. '%s.lua'):fmt(AshitaCore:GetResourceManager():GetString("jobs.names_abbr", gStatus.PlayerJob));
                             local shortFileName = jobFiltersFile:match("[^\\]*.$");
 
-                            if gFileTools.CopyFile(defaultFiltersFile, jobFiltersFile, true) then
+                            if gFileTools.OverwriteProfile(jobFiltersFile, defaultFiltersFile) then
                                 print(chat.header('SimpleLog') .. chat.message('Recreated filters profile: ') .. chat.color1(2, shortFileName));
                             end
-                            gStatus.LoadFilters();
+                            gStatus.LoadProfile(jobFiltersFile, 'filters');
                             imgui.CloseCurrentPopup()
                         end
                         imgui.SameLine()
