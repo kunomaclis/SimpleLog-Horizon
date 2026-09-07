@@ -185,7 +185,7 @@ end
 
 ui.render_config = function(toggle)
     if toggle then
-        state = (not ui.state.open[1] and "Opening") or "Closing"
+        local state = (not ui.state.open[1] and "Opening") or "Closing"
         print(chat.header('SimpleLog')..chat.message(state .. ' menu...'))
         ui.state.open[1] = not ui.state.open[1]
         --print('settings open: '..tostring(ui.state.open))
@@ -195,10 +195,12 @@ ui.render_config = function(toggle)
         --print('settings close: '..tostring(ui.state.open))
         return
     end
+    if not gProfileSettings or not gProfileFilter or not gProfileColor then
+        return
+    end
 
     imgui.SetNextWindowContentSize({ 330, 430 })
     imgui.SetNextWindowSizeConstraints({ 330, 470 }, { 430, 650 })
-    imgui.StyleColorsDark()
 
     imgui.PushStyleColor(ImGuiCol_WindowBg , theme.window_bg)
     imgui.PushStyleColor(ImGuiCol_TitleBg, theme.child_bg)
@@ -244,6 +246,7 @@ ui.render_config = function(toggle)
             imgui.SameLine()
             if imgui.Button('\xef\x87\xbc Colors') then
                 ui.state.tab = 2
+                ui.updatecolors()
             end
             imgui.PopStyleColor(3)
             if imgui.IsItemHovered() then
@@ -762,6 +765,7 @@ ui.render_config = function(toggle)
                     if imgui.Button('\xef\x94\xbf Color Test') then
                         local counter = 0
                         local line = ''
+                        local loc_col
                         for n = 1, 262 do
                             if not color_redundant:contains(n) and not black_colors:contains(n) then
                                 if n <= 255 then
@@ -786,7 +790,6 @@ ui.render_config = function(toggle)
                         imgui.SetTooltip('Show available colors on chat')
                     end
 
-                    ui.updatecolors()
                     local colors_inputbox = {}
                     for i, v in ipairs(color_info.color_order) do
                         imgui.PushItemWidth(30)
@@ -835,14 +838,26 @@ ui.save_changes = function ()
 	local defaultColorsFile = gStatus.SettingsFolder .. 'chat_colors.lua';
 	local jobFiltersFile = (gStatus.SettingsFolder .. '%s.lua'):fmt(AshitaCore:GetResourceManager():GetString("jobs.names_abbr", gStatus.PlayerJob));
 
-    gFileTools.SaveChanges(defaultSettingsFile, gProfileSettings, 'settings')
+    if not gFileTools.SaveChanges(defaultSettingsFile, gProfileSettings, 'settings') then
+        gFuncs.Error('Failed to save config.lua')
+        return
+    end
     if gStatus.CurrentFilters == ('%s.lua'):fmt(AshitaCore:GetResourceManager():GetString("jobs.names_abbr", gStatus.PlayerJob)) then
-        gFileTools.SaveChanges(jobFiltersFile, gProfileFilter, 'filters')
+        if not gFileTools.SaveChanges(jobFiltersFile, gProfileFilter, 'filters') then
+            gFuncs.Error('Failed to save filter profile')
+            return
+        end
     else
-        gFileTools.SaveChanges(defaultFiltersFile, gProfileFilter, 'filters')
+        if not gFileTools.SaveChanges(defaultFiltersFile, gProfileFilter, 'filters') then
+            gFuncs.Error('Failed to save default_filters.lua')
+            return
+        end
     end
     
-    gFileTools.SaveChanges(defaultColorsFile, gProfileColor, 'colors')
+    if not gFileTools.SaveChanges(defaultColorsFile, gProfileColor, 'colors') then
+        gFuncs.Error('Failed to save chat_colors.lua')
+        return
+    end
     print(chat.header('SimpleLog')..chat.success('All changes Saved'))
 end
 

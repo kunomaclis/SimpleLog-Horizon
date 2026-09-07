@@ -9,6 +9,46 @@ local status = {
 Self = nil;
 SelfPlayer = nil;
 
+local function LoadTable(path)
+	local chunk, loadError = loadfile(path)
+	if not chunk and ashita.fs.exists(path .. '.bak') then
+		os.rename(path .. '.bak', path)
+		chunk, loadError = loadfile(path)
+	end
+	if not chunk then
+		return nil, loadError
+	end
+	local ok, profile = pcall(chunk)
+	if not ok then
+		return nil, profile
+	end
+	if type(profile) ~= 'table' then
+		return nil, 'Profile must return a table.'
+	end
+	return profile
+end
+
+local function IsProfileValid(profile, profileType)
+	if profileType == 'config' then
+		return type(profile.lang) == 'table'
+			and type(profile.mode) == 'table'
+			and type(profile.text) == 'table'
+	elseif profileType == 'filters' then
+		return type(profile.me) == 'table'
+			and type(profile.party) == 'table'
+			and type(profile.alliance) == 'table'
+			and type(profile.others) == 'table'
+			and type(profile.my_pet) == 'table'
+			and type(profile.my_fellow) == 'table'
+			and type(profile.other_pets) == 'table'
+			and type(profile.enemies) == 'table'
+			and type(profile.monsters) == 'table'
+	elseif profileType == 'colors' then
+		return next(profile) ~= nil
+	end
+	return false
+end
+
 status.Init = function()
 	if (AshitaCore:GetMemoryManager():GetParty():GetMemberIsActive(0) == 1) then
 		Self = GetPlayerEntity()
@@ -28,6 +68,7 @@ status.Init = function()
 end
 
 status.AutoLoadProfile = function()
+	static_config = false
 	local defaultSettingsFile = gStatus.SettingsFolder .. 'config.lua';
 	local defaultFiltersFile = gStatus.SettingsFolder .. 'default_filters.lua';
 	local defaultColorsFile = gStatus.SettingsFolder .. 'chat_colors.lua';
@@ -64,40 +105,48 @@ end
 
 status.LoadProfile = function(profilePath, profileType)
     local shortFileName = profilePath:match("[^\\]*.$");
-    local success, loadError = loadfile(profilePath);
+    local profile, loadError = LoadTable(profilePath);
+	if profile and not IsProfileValid(profile, profileType) then
+		profile = nil
+		loadError = 'Profile is missing required tables.'
+	end
 
 	if (profileType == 'config') then
-		if not success then
+		if not profile then
 			gProfileSettings = static_settings;
 			print(chat.header('SimpleLog') .. chat.error('Failed to load configuration file: ') .. chat.color1(2, shortFileName)..chat.error('\nSaving will be disabled.'));
 			print(chat.header('SimpleLog') .. chat.error(loadError));
 			static_config = true
 			return;
 		end
-		gProfileSettings = success();
+		gProfileSettings = profile;
 		if (gProfileSettings ~= nil) then
 			print(chat.header('SimpleLog') .. chat.message('Loaded configuration file: ') .. chat.color1(2, shortFileName));
 		end
 	end
 	
 	if (profileType == 'filters') then
-		if not success then
+		if not profile then
 			local defaultFiltersFile = gStatus.SettingsFolder .. 'default_filters.lua';
 			print(chat.header('SimpleLog') .. chat.error('Failed to load filters profile: ') .. chat.color1(2, shortFileName) .. chat.error(' loading defaults: ' .. chat.color1(2, 'default_filters.lua')));
 			print(chat.header('SimpleLog') .. chat.error(loadError));
-			local default_success, default_loadError = loadfile(defaultFiltersFile)
-			if not default_success then
+			local default_profile, default_loadError = LoadTable(defaultFiltersFile)
+			if default_profile and not IsProfileValid(default_profile, 'filters') then
+				default_profile = nil
+				default_loadError = 'Profile is missing required tables.'
+			end
+			if not default_profile then
 				gProfileFilter = static_filters;
 				print(chat.header('SimpleLog') .. chat.error('Failed to load filters profile: ') .. chat.color1(2, 'default_filters.lua')..chat.error('\nSaving will be disabled.'));
 				print(chat.header('SimpleLog') .. chat.error(default_loadError));
 				static_config = true
 				return
 			end
-			gProfileFilter = default_success();
+			gProfileFilter = default_profile;
 			gStatus.CurrentFilters = 'default_filters.lua'
 			return;
 		else
-			gProfileFilter = success();
+			gProfileFilter = profile;
 		end
 		if (gProfileFilter ~= nil) then
 			print(chat.header('SimpleLog') .. chat.message('Loaded filters profile: ') .. chat.color1(2, shortFileName));
@@ -106,14 +155,14 @@ status.LoadProfile = function(profilePath, profileType)
 	end
 	
 	if (profileType == 'colors') then
-		if not success then
+		if not profile then
 			gProfileColor = static_colors;
 			print(chat.header('SimpleLog') .. chat.error('Failed to load colors profile: ') .. chat.color1(2, shortFileName)..chat.error('\nSaving will be disabled.'));
 			print(chat.header('SimpleLog') .. chat.error(loadError));
 			static_config = true
 			return;
 		end
-		gProfileColor = success();
+		gProfileColor = profile;
 		if (gProfileColor ~= nil) then
 			print(chat.header('SimpleLog') .. chat.message('Loaded colors profile: ') .. chat.color1(2, shortFileName));
 		end

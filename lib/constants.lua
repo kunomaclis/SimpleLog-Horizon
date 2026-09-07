@@ -319,6 +319,7 @@ static_settings = T{
 		condensecrits = false,
 		tpstatuses = true,
 		simplify = true,
+		show_debug_messages = false,
 		showpetownernames = false,
 		crafting = true,
 		showblocks = true,

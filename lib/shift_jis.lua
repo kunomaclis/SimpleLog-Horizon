@@ -43,6 +43,7 @@ local UTF8toSJIS = {
 		[0xE9] = {0xE98080, 0x327A4}; --文字"退" UTF8コード E98080～、S_jisコード91DE
 	};
 }
+local conversion_table
 
 --***********String型文字列をShift_JISコードに変換************************************
 function UTF8toSJIS:UTF8_to_SJIS_str_cnv(strUTF8) -- return strSJIS, sj_length
@@ -54,24 +55,27 @@ function UTF8toSJIS:UTF8_to_SJIS_str_cnv(strUTF8) -- return strSJIS, sj_length
 	local str_length = strUTF8:len()
 
 	local UTF8SJIS_file = "Utf8Sjis.tbl"
-	local f2 = io.open(('%saddons\\simplelog\\lib\\res\\%s'):fmt(AshitaCore:GetInstallPath(), UTF8SJIS_file), "r")
-
-	if f2==nil then
-		return nil
+	if not conversion_table then
+		local file = io.open(('%saddons\\simplelog\\lib\\res\\%s'):fmt(AshitaCore:GetInstallPath(), UTF8SJIS_file), "rb")
+		if not file then
+			return ''
+		end
+		conversion_table = file:read("*all")
+		file:close()
 	end
 
 	while fnt_cnt<=str_length do
 		local utf8_byte = strUTF8:byte(fnt_cnt)
 		if utf8_byte>=0xC2 and utf8_byte<=0xD1 then --2バイト文字
 			sp_addres = self:UTF8_To_SJIS_code_cnv(strUTF8:byte(fnt_cnt,fnt_cnt+1))
-			SJ1, SJ2 = self:SD_Flash_UTF8SJIS_Table_Read(f2, sp_addres)
+			SJ1, SJ2 = self:SD_Flash_UTF8SJIS_Table_Read(conversion_table, sp_addres)
 			sjis_byte[sj_cnt] 	= SJ1
 			sjis_byte[sj_cnt+1] = SJ2
 			sj_cnt	= sj_cnt  + 2
 			fnt_cnt = fnt_cnt + 2
 		elseif utf8_byte>=0xE2 and utf8_byte<=0xEF then
 			sp_addres = self:UTF8_To_SJIS_code_cnv(strUTF8:byte(fnt_cnt,fnt_cnt+2))
-			SJ1, SJ2 = self:SD_Flash_UTF8SJIS_Table_Read(f2, sp_addres)
+			SJ1, SJ2 = self:SD_Flash_UTF8SJIS_Table_Read(conversion_table, sp_addres)
 			if SJ1>=0xA1 and SJ1<=0xDF then --Shift_JISで半角カナコードが返ってきた場合の対処
 				sjis_byte[sj_cnt] 	= SJ1
 				sj_cnt = sj_cnt + 1
@@ -119,8 +123,8 @@ end
 
 function UTF8toSJIS:SD_Flash_UTF8SJIS_Table_Read(ff, addrs) --return: sj1, sj2
 	if ff then
-		ff:seek("set", addrs)
-		return (ff:read(2)):byte(1,2)
+		local sj1, sj2 = ff:byte(addrs + 1, addrs + 2)
+		return sj1 or 0x20, sj2 or 0x20
 	else
 		return " UTF8toSjis file has not been uploaded to the flash in SD file system"
 	end
