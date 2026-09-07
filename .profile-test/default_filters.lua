@@ -35,7 +35,14 @@ local function targeting_me()
 	return filters
 end
 
-local function my_pet()
+local function targeting_my_pet()
+	local filters = telegraphs_only()
+	filters.damage = false
+	filters.other = false
+	return filters
+end
+
+local function my_pet_without_misses()
 	return {
 		ranged = false,
 		uses = false,
@@ -57,7 +64,7 @@ local function enemy_targets()
 		party = telegraphs_only(),
 		alliance = telegraphs_only(),
 		others = telegraphs_only(),
-		my_pet = telegraphs_only(),
+		my_pet = targeting_my_pet(),
 		my_fellow = telegraphs_only(),
 		other_pets = telegraphs_only(),
 		enemies = telegraphs_only(),
@@ -68,7 +75,7 @@ end
 local function monster_targets()
 	return {
 		me = targeting_me(),
-		my_pet = telegraphs_only(),
+		my_pet = targeting_my_pet(),
 		monsters = telegraphs_only(),
 		party = hide_all(),
 		alliance = hide_all(),
@@ -87,7 +94,7 @@ local filters = T{
 		target = true,
 		healing = false,
 		casting = false,
-		melee = true,
+		melee = false,
 		misses = false,
 		damage = false,
 		readies = true,
@@ -96,7 +103,7 @@ local filters = T{
 	party = hide_all(),
 	alliance = hide_all(),
 	others = hide_all(),
-	my_pet = my_pet(),
+	my_pet = my_pet_without_misses(),
 	my_fellow = hide_all(),
 	other_pets = hide_all(),
 	enemies = enemy_targets(),
