@@ -958,13 +958,10 @@ actionhandlers.ActorParse = function (actor_id)
     if not filt then
         if ActorIsNpc then
             if actor_table.TargetIndex > 1791 then
-                -- typ = 'other_pets'
-                -- filt = 'other_pets'
-                -- owner = 'other'
-                -- dmg = 'otherdmg'
-                typ = 'mob'
-                filt = 'monsters'
-                dmg = 'mobdmg'
+                typ = 'other_pets'
+                filt = 'other_pets'
+                owner = 'other'
+                dmg = 'otherdmg'
                 for i, v in pairs(gFuncs.GetPartyData()) do
                     if type(v) == 'table' and v.mob and v.mob.PetTargetIndex and v.mob.PetTargetIndex == actor_table.TargetIndex then
                         if i == 'p0' then
