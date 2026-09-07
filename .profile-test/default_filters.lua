@@ -29,9 +29,31 @@ local function telegraphs_only()
 	};
 end
 
+local function targeting_me()
+	local filters = telegraphs_only()
+	filters.other = false
+	return filters
+end
+
+local function my_pet()
+	return {
+		ranged = false,
+		uses = false,
+		all = false,
+		healing = false,
+		casting = false,
+		melee = false,
+		misses = true,
+		damage = false,
+		readies = false,
+		items = true,
+		other = false,
+	};
+end
+
 local function enemy_targets()
 	return {
-		me = telegraphs_only(),
+		me = targeting_me(),
 		party = telegraphs_only(),
 		alliance = telegraphs_only(),
 		others = telegraphs_only(),
@@ -45,7 +67,7 @@ end
 
 local function monster_targets()
 	return {
-		me = telegraphs_only(),
+		me = targeting_me(),
 		my_pet = telegraphs_only(),
 		monsters = telegraphs_only(),
 		party = hide_all(),
@@ -63,7 +85,7 @@ local filters = T{
 		uses = true,
 		all = false,
 		target = true,
-		healing = true,
+		healing = false,
 		casting = false,
 		melee = true,
 		misses = false,
@@ -74,7 +96,7 @@ local filters = T{
 	party = hide_all(),
 	alliance = hide_all(),
 	others = hide_all(),
-	my_pet = hide_all(),
+	my_pet = my_pet(),
 	my_fellow = hide_all(),
 	other_pets = hide_all(),
 	enemies = enemy_targets(),
