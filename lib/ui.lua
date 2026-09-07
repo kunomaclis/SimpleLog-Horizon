@@ -25,6 +25,7 @@ local filter_info = {
         'Uses',
         'Readies',
         'Casting',
+        'Other',
     },
 
     filter_categories = {
@@ -530,7 +531,7 @@ ui.render_config = function(toggle)
                                 for i, v in ipairs(filter_info.filter_order) do
                                     imgui.TextColored(theme.header_text_col, '\xef\x8c\x8b')
                                     imgui.SameLine()
-                                    player_checkboxes[i] = imgui.Checkbox(('##player_%s'):fmt(v), {gProfileFilter.me[v:lower()]})
+                                    player_checkboxes[i] = imgui.Checkbox(('##player_%s'):fmt(v), {gProfileFilter.me[v:lower()] == true})
                                     if player_checkboxes[i] then
                                         gProfileFilter.me[v:lower()] = not gProfileFilter.me[v:lower()]
                                     end
@@ -561,7 +562,7 @@ ui.render_config = function(toggle)
                                 for i, v in ipairs(filter_info.filter_order) do
                                     imgui.TextColored(theme.header_text_col, '\xef\x8c\x8b')
                                     imgui.SameLine()
-                                    party_checkboxes[i] = imgui.Checkbox(('##party_%s'):fmt(v), {gProfileFilter.party[v:lower()]})
+                                    party_checkboxes[i] = imgui.Checkbox(('##party_%s'):fmt(v), {gProfileFilter.party[v:lower()] == true})
                                     if party_checkboxes[i] then
                                         gProfileFilter.party[v:lower()] = not gProfileFilter.party[v:lower()]
                                     end
@@ -584,7 +585,7 @@ ui.render_config = function(toggle)
                                 for i, v in ipairs(filter_info.filter_order) do
                                     imgui.TextColored(theme.header_text_col, '\xef\x8c\x8b')
                                     imgui.SameLine()
-                                    alliance_checkboxes[i] = imgui.Checkbox(('##alliance_%s'):fmt(v), {gProfileFilter.alliance[v:lower()]})
+                                    alliance_checkboxes[i] = imgui.Checkbox(('##alliance_%s'):fmt(v), {gProfileFilter.alliance[v:lower()] == true})
                                     if alliance_checkboxes[i] then
                                         gProfileFilter.alliance[v:lower()] = not gProfileFilter.alliance[v:lower()]
                                     end
@@ -607,7 +608,7 @@ ui.render_config = function(toggle)
                                 for i, v in ipairs(filter_info.filter_order) do
                                     imgui.TextColored(theme.header_text_col, '\xef\x8c\x8b')
                                     imgui.SameLine()
-                                    my_pet_checkboxes[i] = imgui.Checkbox(('##my_pet_%s'):fmt(v), {gProfileFilter.my_pet[v:lower()]})
+                                    my_pet_checkboxes[i] = imgui.Checkbox(('##my_pet_%s'):fmt(v), {gProfileFilter.my_pet[v:lower()] == true})
                                     if my_pet_checkboxes[i] then
                                         gProfileFilter.my_pet[v:lower()] = not gProfileFilter.my_pet[v:lower()]
                                     end
@@ -631,7 +632,7 @@ ui.render_config = function(toggle)
                                 for i, v in ipairs(filter_info.filter_order) do
                                     imgui.TextColored(theme.header_text_col, '\xef\x8c\x8b')
                                     imgui.SameLine()
-                                    others_checkboxes[i] = imgui.Checkbox(('##others_%s'):fmt(v), {gProfileFilter.others[v:lower()]})
+                                    others_checkboxes[i] = imgui.Checkbox(('##others_%s'):fmt(v), {gProfileFilter.others[v:lower()] == true})
                                     if others_checkboxes[i] then
                                         gProfileFilter.others[v:lower()] = not gProfileFilter.others[v:lower()]
                                     end
@@ -654,7 +655,7 @@ ui.render_config = function(toggle)
                                 for i, v in ipairs(filter_info.filter_order) do
                                     imgui.TextColored(theme.header_text_col, '\xef\x8c\x8b')
                                     imgui.SameLine()
-                                    my_fellow_checkboxes[i] = imgui.Checkbox(('##my_fellow_%s'):fmt(v), {gProfileFilter.my_fellow[v:lower()]})
+                                    my_fellow_checkboxes[i] = imgui.Checkbox(('##my_fellow_%s'):fmt(v), {gProfileFilter.my_fellow[v:lower()] == true})
                                     if my_fellow_checkboxes[i] then
                                         gProfileFilter.my_fellow[v:lower()] = not gProfileFilter.my_fellow[v:lower()]
                                     end
@@ -677,7 +678,7 @@ ui.render_config = function(toggle)
                                 for i, v in ipairs(filter_info.filter_order) do
                                     imgui.TextColored(theme.header_text_col, '\xef\x8c\x8b')
                                     imgui.SameLine()
-                                    other_pets_checkboxes[i] = imgui.Checkbox(('##other_pets_%s'):fmt(v), {gProfileFilter.other_pets[v:lower()]})
+                                    other_pets_checkboxes[i] = imgui.Checkbox(('##other_pets_%s'):fmt(v), {gProfileFilter.other_pets[v:lower()] == true})
                                     if other_pets_checkboxes[i] then
                                         gProfileFilter.other_pets[v:lower()] = not gProfileFilter.other_pets[v:lower()]
                                     end
@@ -708,7 +709,7 @@ ui.render_config = function(toggle)
                                         local m_int = m:lower()
                                         imgui.TextColored(theme.header_text_col, '\xef\x8c\x8b')
                                         imgui.SameLine()
-                                        enemies_checkboxes['internal'][enemies_index] = imgui.Checkbox(('##enemies_%s_%s'):fmt(v_int, m_int), {gProfileFilter.enemies[v_int][m_int]})
+                                        enemies_checkboxes['internal'][enemies_index] = imgui.Checkbox(('##enemies_%s_%s'):fmt(v_int, m_int), {gProfileFilter.enemies[v_int][m_int] == true})
                                         if enemies_checkboxes['internal'][enemies_index] then
                                             gProfileFilter.enemies[v_int][m_int] = not gProfileFilter.enemies[v_int][m_int]
                                         end
@@ -741,7 +742,7 @@ ui.render_config = function(toggle)
                                         local m_int = m:lower()
                                         imgui.TextColored(theme.header_text_col, '\xef\x8c\x8b')
                                         imgui.SameLine()
-                                        monsters_checkboxes['internal'][monsters_index] = imgui.Checkbox(('##monsters_%s_%s'):fmt(v_int, m_int), {gProfileFilter.monsters[v_int][m_int]})
+                                        monsters_checkboxes['internal'][monsters_index] = imgui.Checkbox(('##monsters_%s_%s'):fmt(v_int, m_int), {gProfileFilter.monsters[v_int][m_int] == true})
                                         if monsters_checkboxes['internal'][monsters_index] then
                                             gProfileFilter.monsters[v_int][m_int] = not gProfileFilter.monsters[v_int][m_int]
                                         end
