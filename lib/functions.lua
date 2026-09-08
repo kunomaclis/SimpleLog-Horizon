@@ -187,6 +187,10 @@ end
 
 local missing_filter_rows = {}
 
+local ResetFilterDiagnostics = function()
+    missing_filter_rows = {}
+end
+
 local CheckFilter = function(actor, target, category, msg)
     -- This determines whether the message should be displayed or filtered
     -- Returns true (don't filter) or false (filter), boolean
@@ -519,6 +523,7 @@ local exports = {
 	ColorIt = ColorIt,
 	Conjunctions = Conjunctions,
 	SearchField = SearchField,
+	ResetFilterDiagnostics = ResetFilterDiagnostics,
 	CheckFilter = CheckFilter,
 	ActorNoun = ActorNoun,
 	PluralActor = PluralActor,

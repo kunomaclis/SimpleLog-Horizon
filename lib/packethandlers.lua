@@ -9,7 +9,7 @@ local action_errors = {};
 
 local function report_action_error(err, e)
     local message = tostring(err);
-    local now = os.clock();
+    local now = os.time();
     local previous = action_errors[message];
     local debug_enabled = gProfileSettings
         and gProfileSettings.mode
@@ -153,6 +153,8 @@ packethandlers.HandleIncomingPacket = function(e)
             e.data_modified = modified;
         elseif not ok then
             report_action_error(modified, e);
+        else
+            report_action_error('handler returned no packet data', e);
         end
     end
 

@@ -126,6 +126,7 @@ status.LoadProfile = function(profilePath, profileType)
 	end
 	
 	if (profileType == 'filters') then
+		gFuncs.ResetFilterDiagnostics()
 		if not profile then
 			local defaultFiltersFile = gStatus.SettingsFolder .. 'default_filters.lua';
 			print(chat.header('SimpleLog') .. chat.error('Failed to load filters profile: ') .. chat.color1(2, shortFileName) .. chat.error(' loading defaults: ' .. chat.color1(2, 'default_filters.lua')));
