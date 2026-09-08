@@ -185,6 +185,8 @@ local SearchField = function(message)
     return fieldarr
 end
 
+local missing_filter_rows = {}
+
 local CheckFilter = function(actor, target, category, msg)
     -- This determines whether the message should be displayed or filtered
     -- Returns true (don't filter) or false (filter), boolean
@@ -192,7 +194,12 @@ local CheckFilter = function(actor, target, category, msg)
 
     local filtertab = (gProfileFilter[actor.filter] and gProfileFilter[actor.filter][target.filter]) or gProfileFilter[actor.filter]
     if type(filtertab) ~= 'table' then
-        return false
+        local key = tostring(actor.filter) .. ':' .. tostring(target.filter)
+        if not missing_filter_rows[key] then
+            missing_filter_rows[key] = true
+            gFuncs.Error('Missing filter row: ' .. key)
+        end
+        return true
     end
 
     local color = nf(res_actmsg[msg], 'color')

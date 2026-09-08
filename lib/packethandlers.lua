@@ -5,6 +5,25 @@ local packethandlers = {};
 -- trying to identify possible dupes
 local last_chunk_buffer;
 local reference_buffer = T{};
+local action_errors = {};
+
+local function report_action_error(err, e)
+    local message = tostring(err);
+    local now = os.clock();
+    local previous = action_errors[message];
+    local debug_enabled = gProfileSettings
+        and gProfileSettings.mode
+        and gProfileSettings.mode.show_debug_messages;
+
+    if not previous or (debug_enabled and now - previous >= 5) then
+        action_errors[message] = now;
+        local details = debug_enabled
+            and (' [size=%s, chunk=%s]'):fmt(tostring(e.size), tostring(e.chunk_size))
+            or '';
+        gFuncs.Error('0x28 parsing failed: ' .. message .. details);
+    end
+end
+
 local function record_packets(e)
     if type(e.data) ~= 'string' or type(e.chunk_data) ~= 'string'
         or type(e.size) ~= 'number' or type(e.chunk_size) ~= 'number'
@@ -132,6 +151,8 @@ packethandlers.HandleIncomingPacket = function(e)
         local ok, modified = pcall(gPacketHandlers.HandleIncoming0x28, e);
         if ok and modified then
             e.data_modified = modified;
+        elseif not ok then
+            report_action_error(modified, e);
         end
     end
 

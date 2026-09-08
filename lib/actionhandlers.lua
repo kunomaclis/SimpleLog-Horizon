@@ -996,7 +996,7 @@ actionhandlers.ActorParse = function (actor_id)
                 filt = 'monsters'
                 dmg = 'mobdmg'
 
-                if gProfileFilter.enemies then
+                if gProfileFilter.enemies and SelfPlayer then
                     for i,v in pairs(SelfPlayer:GetBuffs()) do
                         if domain_buffs:contains(v) then
                             -- If you are in Domain Invasion, or a Reive, or various other places
