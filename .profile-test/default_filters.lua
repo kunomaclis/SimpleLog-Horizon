@@ -31,6 +31,9 @@ end
 
 local function targeting_me()
 	local filters = telegraphs_only()
+	filters.ranged = false
+	filters.melee = false
+	filters.damage = false
 	filters.other = false
 	return filters
 end
