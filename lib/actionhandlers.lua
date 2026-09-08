@@ -12,7 +12,7 @@ local function ShouldSkipDuplicateAction(act, target, action, kind)
         tostring(act.param),
         tostring(act.action and act.action.id or ''),
         tostring(act.action and act.action.weapon_skill or ''),
-        tostring(target and target.server_id or ''),
+        tostring(target and target.id or ''),
         tostring(action.message or 0),
         tostring(action.param or 0),
         tostring(action.add_effect_message or 0),
@@ -149,7 +149,7 @@ actionhandlers.parse_action_packet = function(act)
                             end
                         end
                         if m.has_spike_effect and r.spike_effect_message ~= 0 then
-                            if r.spike_effect_effect == r.spike_effect_effect and m.spike_effect_message == r.spike_effect_message and m.spike_effect_message ~= 0 then
+                            if m.spike_effect_effect == r.spike_effect_effect and m.spike_effect_message == r.spike_effect_message and m.spike_effect_message ~= 0 then
                                 r.spike_effect_number = r.spike_effect_number + 1
                                 if not gProfileSettings.mode.sumdamage then
                                     r.cspike_effect_param = (r.cspike_effect_param or r.spike_effect_param)..', '..m.spike_effect_param
@@ -198,7 +198,8 @@ actionhandlers.parse_action_packet = function(act)
                 end
             end
         end
-        if gProfileSettings.mode.condensetargets and i > 1 then
+        if gProfileSettings.mode.condensetargets and i > 1 and #v.actions == 1
+            and not v.actions[1].has_add_effect and not v.actions[1].has_spike_effect then
             for n=1, i-1 do
                 local m = act.targets[n]
                 if(v.actions[1].message == m.actions[1].message and v.actions[1].param == m.actions[1].param) or
@@ -217,7 +218,7 @@ actionhandlers.parse_action_packet = function(act)
             if m.message ~= 0 and res_actmsg[m.message] ~= nil then
                 local col = res_actmsg[m.message].color
                 local targ =  gActionHandlers.AssembleTargets(act.actor, v.target, act.category, m.message)
-                local color = gActionHandlers.ColorFilt(col, v.target[1].server_id == Self.ServerId)
+                local color = gActionHandlers.ColorFilt(col, v.target[1].id == Self.ServerId)
                 if gProfileSettings.lang.msg_text == 'jp' then
                     if m.reaction == 11 and act.category == 1 then m.simp_name = UTF8toSJIS:UTF8_to_SJIS_str_cnv('によって受け流された')
                     -- elseif m.reaction == 12 and act.category == 1 then m.simp_name = UTF8toSJIS:UTF8_to_SJIS_str_cnv('によってブロックされました')
@@ -399,7 +400,7 @@ actionhandlers.parse_action_packet = function(act)
                     if plural_entities:contains(act.actor.id) then
                         msg = gFuncs.PluralActor(msg, m.message)
                     end
-                    if targets_condensed or plural_entities:contains(v.target[1].server_id) then
+                    if targets_condensed or plural_entities:contains(v.target[1].id) then
                         msg = gFuncs.PluralTarget(msg, m.message)
                     end
                 end
@@ -436,10 +437,11 @@ actionhandlers.parse_action_packet = function(act)
                     m.message = 0
                 end
             end
-            if m.has_add_effect and m.add_effect_message ~= 0 and add_effect_valid[act.category] then
+            if m.has_add_effect and m.add_effect_message ~= 0 and add_effect_valid[act.category]
+                and res_actmsg[m.add_effect_message] and m.add_effect_fields then
                 local targ = gActionHandlers.AssembleTargets(act.actor, v.target, act.category, m.add_effect_message, m.has_add_effect)
                 local col = res_actmsg[m.add_effect_message].color
-                local color = gActionHandlers.ColorFilt(col, v.target[1].server_id == Self.ServerId)
+                local color = gActionHandlers.ColorFilt(col, v.target[1].id == Self.ServerId)
                 if m.add_effect_message > 287 and m.add_effect_message < 303 then m.simp_add_name = UTF8toSJIS:UTF8_to_SJIS_str_cnv(skillchain_arr[gProfileSettings.lang.msg_text][m.add_effect_message-287])
                 elseif m.add_effect_message > 384 and m.add_effect_message < 399 then m.simp_add_name = UTF8toSJIS:UTF8_to_SJIS_str_cnv(skillchain_arr[gProfileSettings.lang.msg_text][m.add_effect_message-384])
                 elseif m.add_effect_message > 766 and m.add_effect_message < 769 then m.simp_add_name = UTF8toSJIS:UTF8_to_SJIS_str_cnv(skillchain_arr[gProfileSettings.lang.msg_text][m.add_effect_message-752])
@@ -464,7 +466,7 @@ actionhandlers.parse_action_packet = function(act)
                     if plural_entities:contains(act.actor.id) then
                         msg = gFuncs.PluralActor(msg, m.add_effect_message)
                     end
-                    if targets_condensed or plural_entities:contains(v.target[1].server_id) then
+                    if targets_condensed or plural_entities:contains(v.target[1].id) then
                         msg = gFuncs.PluralTarget(msg, m.add_effect_message)
                     end
                 end
@@ -504,7 +506,8 @@ actionhandlers.parse_action_packet = function(act)
 					end
 				end
             end
-            if m.has_spike_effect and m.spike_effect_message ~= 0 and spike_effect_valid[act.category] then
+            if m.has_spike_effect and m.spike_effect_message ~= 0 and spike_effect_valid[act.category]
+                and res_actmsg[m.spike_effect_message] and m.spike_effect_fields then
                 local targ = gActionHandlers.AssembleTargets(act.actor, v.target, act.category, m.spike_effect_message, m.has_spike_effect)
                 local col = res_actmsg[m.spike_effect_message].color
                 local color = gActionHandlers.ColorFilt(col, act.actor.id == Self.ServerId)
@@ -541,7 +544,7 @@ actionhandlers.parse_action_packet = function(act)
                     if plural_entities:contains(act.actor.id) then
                         msg = gFuncs.PluralActor(msg, m.spike_effect_message)
                     end
-                    if targets_condensed or plural_entities:contains(v.target[1].server_id) then
+                    if targets_condensed or plural_entities:contains(v.target[1].id) then
                         msg = gFuncs.PluralTarget(msg, m.spike_effect_message)
                     end
                 end
@@ -668,58 +671,77 @@ end
 
 actionhandlers.StringToAct = function(packet)
     local act_table = {}
-    if string.byte(packet) ~= 0x28 then
+    if type(packet) ~= 'string' or #packet < 19 or string.byte(packet) ~= 0x28 then
         return act_table
     end
-    act_table['size'] = ashita.bits.unpack_be(packet:totable(), 32, 8)
-    act_table['actor_id'] = ashita.bits.unpack_be(packet:totable(), 40, 32)
+    local packet_bits = #packet * 8
+    local packet_table = packet:totable()
+    act_table['size'] = ashita.bits.unpack_be(packet_table, 32, 8)
+    act_table['actor_id'] = ashita.bits.unpack_be(packet_table, 40, 32)
 	act_table['actor_index'] = struct.unpack('L', packet, 0x05 + 1);
-    act_table['target_count'] = ashita.bits.unpack_be(packet:totable(), 72, 10)
-    act_table['category'] = ashita.bits.unpack_be(packet:totable(), 82, 4)
-    act_table['param'] = ashita.bits.unpack_be(packet:totable(), 86, 16)
-	act_table['msg'] = ashita.bits.unpack_be(packet:totable(), 230, 10);
-    act_table['unknown'] = ashita.bits.unpack_be(packet:totable(), 102, 16)
-    act_table['recast'] = ashita.bits.unpack_be(packet:totable(), 118, 32)
+    act_table['target_count'] = ashita.bits.unpack_be(packet_table, 72, 10)
+    act_table['category'] = ashita.bits.unpack_be(packet_table, 82, 4)
+    act_table['param'] = ashita.bits.unpack_be(packet_table, 86, 16)
+    act_table['unknown'] = ashita.bits.unpack_be(packet_table, 102, 16)
+    act_table['recast'] = ashita.bits.unpack_be(packet_table, 118, 32)
     act_table['targets'] = {}
 
     local offset = 150
     for i = 1, act_table.target_count do
+        if offset + 36 > packet_bits then
+            return {}
+        end
         local target = {}
         target['offset_start']                   = offset
-        target['server_id']                             = ashita.bits.unpack_be(packet:totable(), offset,     32)
-        target['action_count']                   = ashita.bits.unpack_be(packet:totable(), offset+32,   4)
+        target['server_id']                      = ashita.bits.unpack_be(packet_table, offset,     32)
+        target['action_count']                   = ashita.bits.unpack_be(packet_table, offset+32,   4)
+        if target.action_count == 0 then
+            return {}
+        end
         target['actions'] = {}
         offset = offset + 36
         for n = 1, target.action_count do
+            if offset + 86 > packet_bits then
+                return {}
+            end
             local action = {}
             action['offset_start']               = offset
-            action['reaction']                   = ashita.bits.unpack_be(packet:totable(), offset,     5)
-            action['animation']                  = ashita.bits.unpack_be(packet:totable(), offset+5,  12)
-            action['effect']                     = ashita.bits.unpack_be(packet:totable(), offset+17,  4)
-            action['stagger']                    = ashita.bits.unpack_be(packet:totable(), offset+21,  3)
-            action['knockback']                  = ashita.bits.unpack_be(packet:totable(), offset+24,  3)
-            action['param']                      = ashita.bits.unpack_be(packet:totable(), offset+27, 17)
-            action['message']                    = ashita.bits.unpack_be(packet:totable(), offset+44, 10)
-            action['unknown']                    = ashita.bits.unpack_be(packet:totable(), offset+54, 31)
+            action['reaction']                   = ashita.bits.unpack_be(packet_table, offset,     5)
+            action['animation']                  = ashita.bits.unpack_be(packet_table, offset+5,  12)
+            action['effect']                     = ashita.bits.unpack_be(packet_table, offset+17,  4)
+            action['stagger']                    = ashita.bits.unpack_be(packet_table, offset+21,  3)
+            action['knockback']                  = ashita.bits.unpack_be(packet_table, offset+24,  3)
+            action['param']                      = ashita.bits.unpack_be(packet_table, offset+27, 17)
+            action['message']                    = ashita.bits.unpack_be(packet_table, offset+44, 10)
+            action['unknown']                    = ashita.bits.unpack_be(packet_table, offset+54, 31)
 
-            action['has_add_effect']             = ashita.bits.unpack_be(packet:totable(), offset+85,  1)
+            action['has_add_effect']             = ashita.bits.unpack_be(packet_table, offset+85,  1)
             action['has_add_effect']             = action.has_add_effect == 1
             offset = offset + 86
             if action.has_add_effect then
-                action['add_effect_animation']   = ashita.bits.unpack_be(packet:totable(), offset,     6)
-                action['add_effect_effect']      = ashita.bits.unpack_be(packet:totable(), offset+6,   4)
-                action['add_effect_param']       = ashita.bits.unpack_be(packet:totable(), offset+10, 17)
-                action['add_effect_message']     = ashita.bits.unpack_be(packet:totable(), offset+27, 10)
+                if offset + 37 > packet_bits then
+                    return {}
+                end
+                action['add_effect_animation']   = ashita.bits.unpack_be(packet_table, offset,     6)
+                action['add_effect_effect']      = ashita.bits.unpack_be(packet_table, offset+6,   4)
+                action['add_effect_param']       = ashita.bits.unpack_be(packet_table, offset+10, 17)
+                action['add_effect_message']     = ashita.bits.unpack_be(packet_table, offset+27, 10)
                 offset = offset + 37
             end
-            action['has_spike_effect']           = ashita.bits.unpack_be(packet:totable(), offset,     1)
+            if offset + 1 > packet_bits then
+                return {}
+            end
+            action['has_spike_effect']           = ashita.bits.unpack_be(packet_table, offset,     1)
             action['has_spike_effect']           = action.has_spike_effect == 1
             offset = offset + 1
             if action.has_spike_effect then
-                action['spike_effect_animation'] = ashita.bits.unpack_be(packet:totable(), offset,     6)
-                action['spike_effect_effect']    = ashita.bits.unpack_be(packet:totable(), offset+6,   4)
-                action['spike_effect_param']     = ashita.bits.unpack_be(packet:totable(), offset+10, 14)
-                action['spike_effect_message']   = ashita.bits.unpack_be(packet:totable(), offset+24, 10)
+                if offset + 34 > packet_bits then
+                    return {}
+                end
+                action['spike_effect_animation'] = ashita.bits.unpack_be(packet_table, offset,     6)
+                action['spike_effect_effect']    = ashita.bits.unpack_be(packet_table, offset+6,   4)
+                action['spike_effect_param']     = ashita.bits.unpack_be(packet_table, offset+10, 14)
+                action['spike_effect_message']   = ashita.bits.unpack_be(packet_table, offset+24, 10)
                 offset = offset + 34
             end
             action['offset_end']                 = offset
@@ -936,13 +958,10 @@ actionhandlers.ActorParse = function (actor_id)
     if not filt then
         if ActorIsNpc then
             if actor_table.TargetIndex > 1791 then
-                -- typ = 'other_pets'
-                -- filt = 'other_pets'
-                -- owner = 'other'
-                -- dmg = 'otherdmg'
-                typ = 'mob'
-                filt = 'monsters'
-                dmg = 'mobdmg'
+                typ = 'other_pets'
+                filt = 'other_pets'
+                owner = 'other'
+                dmg = 'otherdmg'
                 for i, v in pairs(gFuncs.GetPartyData()) do
                     if type(v) == 'table' and v.mob and v.mob.PetTargetIndex and v.mob.PetTargetIndex == actor_table.TargetIndex then
                         if i == 'p0' then
@@ -977,7 +996,7 @@ actionhandlers.ActorParse = function (actor_id)
                 filt = 'monsters'
                 dmg = 'mobdmg'
 
-                if gProfileFilter.enemies then
+                if gProfileFilter.enemies and SelfPlayer then
                     for i,v in pairs(SelfPlayer:GetBuffs()) do
                         if domain_buffs:contains(v) then
                             -- If you are in Domain Invasion, or a Reive, or various other places
@@ -1033,7 +1052,7 @@ actionhandlers.SpellParse = function (act)
         spell.data = {Name = {1, 2}}
         spell.data.Name[1] = 'hit'
         spell.data.Name[2] = UTF8toSJIS:UTF8_to_SJIS_str_cnv('の攻撃')
-    elseif act.category == 2 and act.category == 12 then
+    elseif act.category == 2 or act.category == 12 then
         if msg_ID == 77 then
             spell.data = get_job_ability[171] -- Sange
             if spell.data then
@@ -1144,23 +1163,31 @@ actionhandlers.SpellParse = function (act)
         if fields.item then
             if T{125,593,594,595,596,597,598,599}:contains(msg_ID) then
                 local item_article = not gProfileSettings.mode.simplify and gFuncs.AddItemArticle(effect_val) or ''
-
-                spell.item = gFuncs.ColorIt(get_item[effect_val].LogNameSingular[gProfileSettings.lang.object] and item_article..get_item[effect_val].LogNameSingular[gProfileSettings.lang.object] or item_article..get_item[effect_val].Name[gProfileSettings.lang.object], gProfileColor.itemcol)
+                local item = get_item[effect_val]
+                if not item then
+                    return spell
+                end
+                spell.item = gFuncs.ColorIt(item.LogNameSingular[gProfileSettings.lang.object] and item_article..item.LogNameSingular[gProfileSettings.lang.object] or item_article..item.Name[gProfileSettings.lang.object], gProfileColor.itemcol)
                 spell.item_id = abil_ID
             else
                 spell.data = get_item[abil_ID]
-                local item_article = not gProfileSettings.mode.simplify and gFuncs.AddItemArticle(spell.data.Id) or ''
-                if spell.data then
-                    spell.name = gFuncs.ColorIt(spell.data.LogNameSingular[gProfileSettings.lang.object] and item_article..spell.data.LogNameSingular[gProfileSettings.lang.object] or item_article..spell.data.Name[gProfileSettings.lang.object], gProfileColor.itemcol)
-                    spell.item = gFuncs.ColorIt(spell.data.LogNameSingular[gProfileSettings.lang.object] and item_article..spell.data.LogNameSingular[gProfileSettings.lang.object] or item_article..spell.data.Name[gProfileSettings.lang.object], gProfileColor.itemcol)
-                    spell.item_id = abil_ID
+                if not spell.data then
+                    return spell
                 end
+                local item_article = not gProfileSettings.mode.simplify and gFuncs.AddItemArticle(spell.data.Id) or ''
+                spell.name = gFuncs.ColorIt(spell.data.LogNameSingular[gProfileSettings.lang.object] and item_article..spell.data.LogNameSingular[gProfileSettings.lang.object] or item_article..spell.data.Name[gProfileSettings.lang.object], gProfileColor.itemcol)
+                spell.item = gFuncs.ColorIt(spell.data.LogNameSingular[gProfileSettings.lang.object] and item_article..spell.data.LogNameSingular[gProfileSettings.lang.object] or item_article..spell.data.Name[gProfileSettings.lang.object], gProfileColor.itemcol)
+                spell.item_id = abil_ID
             end
         end
 
         if fields.item2 then
             local item_article = not gProfileSettings.mode.simplify and gFuncs.AddItemArticle(effect_val) or ''
-            local tempspell = (msg_ID == 377 or msg_ID == 674) and get_item[effect_val] and get_item[effect_val].LogNamePlural[gProfileSettings.lang.object] and get_item[effect_val].LogNamePlural[gProfileSettings.lang.object] or get_item[effect_val].LogNameSingular[gProfileSettings.lang.object] and item_article..get_item[effect_val].LogNameSingular[gProfileSettings.lang.object] or item_article..get_item[effect_val].Name[gProfileSettings.lang.object]
+            local item = get_item[effect_val]
+            if not item then
+                return spell
+            end
+            local tempspell = (msg_ID == 377 or msg_ID == 674) and item.LogNamePlural[gProfileSettings.lang.object] and item.LogNamePlural[gProfileSettings.lang.object] or item.LogNameSingular[gProfileSettings.lang.object] and item_article..item.LogNameSingular[gProfileSettings.lang.object] or item_article..item.Name[gProfileSettings.lang.object]
             spell.item2 = gFuncs.ColorIt(tempspell, gProfileColor.itemcol)
             spell.item2_id = effect_val
             if fields.number then

@@ -1,17 +1,38 @@
-local ffi = require("ffi");
 local chat = require("chat");
-
-ffi.cdef[[
-    int32_t memcmp(const void* buff1, const void* buff2, size_t count);
-]];
 
 local packethandlers = {};
 
 -- trying to identify possible dupes
 local last_chunk_buffer;
 local reference_buffer = T{};
-function record_packets(e)
-    if ffi.C.memcmp(e.data_raw, e.chunk_data_raw, e.size) == 0 then
+local action_errors = {};
+
+local function report_action_error(err, e)
+    local message = tostring(err);
+    local now = os.time();
+    local previous = action_errors[message];
+    local debug_enabled = gProfileSettings
+        and gProfileSettings.mode
+        and gProfileSettings.mode.show_debug_messages;
+
+    if not previous or (debug_enabled and now - previous >= 5) then
+        action_errors[message] = now;
+        local details = debug_enabled
+            and (' [size=%s, chunk=%s]'):fmt(tostring(e.size), tostring(e.chunk_size))
+            or '';
+        gFuncs.Error('0x28 parsing failed: ' .. message .. details);
+    end
+end
+
+local function record_packets(e)
+    if type(e.data) ~= 'string' or type(e.chunk_data) ~= 'string'
+        or type(e.size) ~= 'number' or type(e.chunk_size) ~= 'number'
+        or e.size <= 0 or e.chunk_size <= 0
+        or e.size > #e.data or e.size > #e.chunk_data then
+        return
+    end
+
+    if e.data:sub(1, e.size) == e.chunk_data:sub(1, e.size) then
         if #reference_buffer > 2 then
             reference_buffer[#reference_buffer] = nil
         end
@@ -24,16 +45,26 @@ function record_packets(e)
         local offset = 0;
     
         while (offset < e.chunk_size) do
+            if offset + 2 > #e.chunk_data then
+                break
+            end
             local size = ashita.bits.unpack_be(e.chunk_data_raw, offset, 9, 7) * 4;
-            local chunk_packet = struct.unpack('c' .. size, e.chunk_data, offset + 1);
+            if size <= 0 or offset + size > e.chunk_size or offset + size > #e.chunk_data then
+                break
+            end
+            local chunk_packet = e.chunk_data:sub(offset + 1, offset + size);
             last_chunk_buffer:append(chunk_packet)
             offset = offset + size;
         end
     end
 	end
 
-	function check_duplicates(e, block_packet)
-		local packet = struct.unpack('c' .. e.size, e.data, 1)
+	local function check_duplicates(e, block_packet)
+        if type(e.data) ~= 'string' or type(e.size) ~= 'number'
+            or e.size <= 0 or e.size > #e.data then
+            return false
+        end
+		local packet = e.data:sub(1, e.size)
 
 		for _, chunk in ipairs(reference_buffer) do
 			for _, bufferEntry in ipairs(chunk) do
@@ -86,8 +117,14 @@ end
 
 packethandlers.HandleIncoming0x28 = function(e)
 	local act_org = gActionHandlers.StringToAct(e.data)
+    if not act_org.actor_id then
+        return e.data
+    end
 	act_org.size = e.data:byte(5)
 	local act_mod = gActionHandlers.StringToAct(e.data_modified)
+    if not act_mod.actor_id then
+        return e.data
+    end
 	act_mod.size = e.data_modified:byte(5)
 
 	return gActionHandlers.ActToString(e.data, gActionHandlers.parse_action_packet(act_org, act_mod))
@@ -97,6 +134,8 @@ packethandlers.HandleIncomingPacket = function(e)
 	record_packets(e)
 	if (e.id == 0x00A) then
 		gPacketHandlers.HandleIncoming0x00A(e);
+    elseif not gProfileSettings or not gProfileFilter or not gProfileColor then
+        return
 	elseif (e.id == 0x28) then
     -- Do not block action packets.
     -- Just skip duplicate SimpleLog parsing.
@@ -109,7 +148,14 @@ packethandlers.HandleIncomingPacket = function(e)
         --return
     --end
 
-    e.data_modified = gPacketHandlers.HandleIncoming0x28(e);
+        local ok, modified = pcall(gPacketHandlers.HandleIncoming0x28, e);
+        if ok and modified then
+            e.data_modified = modified;
+        elseif not ok then
+            report_action_error(modified, e);
+        else
+            report_action_error('handler returned no packet data', e);
+        end
     end
 
 ------- ITEM QUANTITY -------
@@ -145,6 +191,13 @@ packethandlers.HandleIncomingPacket = function(e)
     elseif e.id == 0x00B then -- Reset tables on Zoning
         common_nouns = T{}
         plural_entities = T{}
+        multi_targs = {}
+        multi_actor = {}
+        multi_msg = {}
+        parse_quantity = false
+        item_quantity = {id = 0, count = ''}
+        Self = nil
+        SelfPlayer = nil
 
 ------- ACTION MESSAGE -------
     elseif e.id == 0x29 then
@@ -181,7 +234,7 @@ packethandlers.HandleIncomingPacket = function(e)
             local status = gFuncs.ColorIt(AshitaCore:GetResourceManager():GetString('buffs.names', am.param_1, gProfileSettings.lang.internal), gProfileColor.statuscol)
             local targ = gFuncs.ColorIt(target.name or '', gProfileColor[target.owner or target.type])
             local number = am.param_2
-            local color = gActionHandlers.ColorFilt(res_actmsg[am.message_id].color, am.target_id==Self.ServerId)
+            local color = gActionHandlers.ColorFilt(res_actmsg[am.message_id].color, Self and am.target_id == Self.ServerId)
             if gProfileSettings.mode.simplify then
                 local msg = gProfileSettings.text.line_noactor
                 :gsub('${abil}',status or '')
@@ -219,6 +272,11 @@ packethandlers.HandleIncomingPacket = function(e)
                 status = gFuncs.ColorIt(AshitaCore:GetResourceManager():GetString('buffs.names', am.param_1, gProfileSettings.lang.internal), 0)
             else
                 status = gFuncs.ColorIt(AshitaCore:GetResourceManager():GetString('buffs.names', am.param_1, gProfileSettings.lang.internal), gProfileColor.statuscol)
+            end
+
+            if not status then
+                e.blocked = false
+                return
             end
 
             if not multi_actor[status] then multi_actor[status] = gActionHandlers.ActorParse(am.actor_id) end
@@ -272,6 +330,7 @@ packethandlers.HandleIncomingPacket = function(e)
             if fields.spell then
                 if not get_spell[am.param_1] then
                     e.blocked = false
+                    return
                 end
                 spell = get_spell[am.param_1].Name[gProfileSettings.lang.object]
             end
@@ -341,8 +400,9 @@ packethandlers.HandleIncomingPacket = function(e)
         if not Self then
             gPacketHandlers.DelayedSelfAssign:once(1)
         end
-        if Self and Self.ServerId == struct.unpack('I', e.data, 5) or target_id == struct.unpack('I', e.data, 5) then
-            local crafter_name = (Self.ServerId == struct.unpack('I', e.data, 5) and Self.Name) or target.Name
+        local actor_id = struct.unpack('I', e.data, 5)
+        if (Self and Self.ServerId == actor_id) or (target and target_id == actor_id) then
+            local crafter_name = (Self and Self.ServerId == actor_id and Self.Name) or target.Name
             local result = e.data:byte(13)
             if result == 0 then
                 AshitaCore:GetChatManager():AddChatMessage(8, false, ' ------------- NQ Synthesis ('..crafter_name..') -------------')
@@ -380,32 +440,41 @@ end
 
 packethandlers.multi_packet = function(...)
     local ind = table.concat({...}, ' ')
-    -- Check for duplicated packets
-    local isDupe = {}
-    for i,v in pairs(multi_targs[ind]) do
-        local id = multi_targs[ind][i].id
-        if isDupe[id] then
-            table.remove(multi_targs[ind], i)
-        end
-        isDupe[id] = i
-    end
-    local targets = gActionHandlers.AssembleTargets(multi_actor[ind], multi_targs[ind], 0, multi_msg[ind])
-    local msg = nil
-    if gProfileSettings.lang.msg_text == 'jp' then
-        msg = res_actmsg[multi_msg[ind]]['jp']
-        msg = UTF8toSJIS:UTF8_to_SJIS_str_cnv(msg)
-    else
-        msg = res_actmsg[multi_msg[ind]]['en']
-    end
-    local outstr = targets_condensed and gProfileSettings.lang.msg_text ~= 'jp' and gFuncs.PluralTarget(msg, multi_msg[ind]) or msg
-    outstr = gFuncs.CleanMsg(outstr
-    :gsub('${target}\'s',targets)
-    :gsub('${target}',targets)
-    :gsub('${status}',ind), multi_msg[ind])
-    AshitaCore:GetChatManager():AddChatMessage(res_actmsg[multi_msg[ind]].color, false, outstr)
+    local targets_data = multi_targs[ind]
+    local actor = multi_actor[ind]
+    local message_id = multi_msg[ind]
     multi_targs[ind] = nil
     multi_msg[ind] = nil
     multi_actor[ind] = nil
+
+    if not targets_data or not actor or not message_id or not res_actmsg[message_id] then
+        return
+    end
+
+    -- Check for duplicated packets
+    local isDupe = {}
+    for i = #targets_data, 1, -1 do
+        local id = targets_data[i].id
+        if isDupe[id] then
+            table.remove(targets_data, i)
+        else
+            isDupe[id] = true
+        end
+    end
+    local targets = gActionHandlers.AssembleTargets(actor, targets_data, 0, message_id)
+    local msg = nil
+    if gProfileSettings.lang.msg_text == 'jp' then
+        msg = res_actmsg[message_id]['jp']
+        msg = UTF8toSJIS:UTF8_to_SJIS_str_cnv(msg)
+    else
+        msg = res_actmsg[message_id]['en']
+    end
+    local outstr = targets_condensed and gProfileSettings.lang.msg_text ~= 'jp' and gFuncs.PluralTarget(msg, message_id) or msg
+    outstr = gFuncs.CleanMsg(outstr
+    :gsub('${target}\'s',targets)
+    :gsub('${target}',targets)
+    :gsub('${status}',ind), message_id)
+    AshitaCore:GetChatManager():AddChatMessage(res_actmsg[message_id].color, false, outstr)
 end
 
 packethandlers.HandleOutgoingPacket = function(e)

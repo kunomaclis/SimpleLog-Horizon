@@ -12,6 +12,88 @@ local CreateDirectories = function(path)
     return true;
 end
 
+local ReadAll = function(path)
+    local file, openError = io.open(path, 'rb')
+    if not file then
+        return nil, openError
+    end
+    local data = file:read('*all')
+    file:close()
+    return data
+end
+
+local AtomicWrite = function(path, data)
+    local tempPath = path .. '.tmp'
+    local backupPath = path .. '.bak'
+    local file, openError = io.open(tempPath, 'wb')
+    if not file then
+        gFuncs.Error('Failed to access file: ' .. tempPath .. ': ' .. tostring(openError))
+        return false
+    end
+
+    local written, writeError = file:write(data)
+    file:close()
+    if not written then
+        os.remove(tempPath)
+        gFuncs.Error('Failed to write file: ' .. tempPath .. ': ' .. tostring(writeError))
+        return false
+    end
+
+    local hadOriginal = ashita.fs.exists(path)
+    if hadOriginal then
+        os.remove(backupPath)
+        local moved, moveError = os.rename(path, backupPath)
+        if not moved then
+            os.remove(tempPath)
+            gFuncs.Error('Failed to back up file: ' .. path .. ': ' .. tostring(moveError))
+            return false
+        end
+    end
+
+    local installed, installError = os.rename(tempPath, path)
+    if not installed then
+        if hadOriginal then
+            os.rename(backupPath, path)
+        end
+        os.remove(tempPath)
+        gFuncs.Error('Failed to replace file: ' .. path .. ': ' .. tostring(installError))
+        return false
+    end
+
+    if hadOriginal then
+        os.remove(backupPath)
+    end
+    return true
+end
+
+local SerializeValue
+SerializeValue = function(value, indent)
+    local valueType = type(value)
+    if valueType == 'table' then
+        local keys = {}
+        for key in pairs(value) do
+            keys[#keys + 1] = key
+        end
+        table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+
+        local lines = {'T{\n'}
+        local childIndent = indent .. '\t'
+        for _, key in ipairs(keys) do
+            local keyText = type(key) == 'string' and key:match('^[%a_][%w_]*$')
+                and key or ('[' .. string.format('%q', key) .. ']')
+            lines[#lines + 1] = childIndent .. keyText .. ' = '
+                .. SerializeValue(value[key], childIndent) .. ',\n'
+        end
+        lines[#lines + 1] = indent .. '}'
+        return table.concat(lines)
+    elseif valueType == 'string' then
+        return string.format('%q', value)
+    elseif valueType == 'number' or valueType == 'boolean' then
+        return tostring(value)
+    end
+    return 'nil'
+end
+
 
 local CreateNewProfile = function(path, file_name)
     if ashita.fs.exists(path) then
@@ -23,19 +105,13 @@ local CreateNewProfile = function(path, file_name)
         return;
     end
 
-    local file = io.open(path, 'w');
-    if (file == nil) then
-        gFuncs.Error('Failed to access file: ' .. path);
-        return false;
-    end
-	
 	local src_profile_path = ('%saddons\\simplelog\\%s.lua'):fmt(AshitaCore:GetInstallPath(), file_name);
-	local src_profile_file = io.open(src_profile_path, 'r');
-	local src_profile_data = src_profile_file:read('*all');
-	file:write(src_profile_data);
-	file:close();
-	src_profile_file:close();
-	return true;
+	local src_profile_data, readError = ReadAll(src_profile_path)
+    if not src_profile_data then
+        gFuncs.Error('Failed to access file: ' .. src_profile_path .. ': ' .. tostring(readError))
+        return false
+    end
+	return AtomicWrite(path, src_profile_data);
 end
 
 
@@ -44,22 +120,12 @@ local OverwriteProfile = function (path, source_path)
         return;
     end
 
-    if ashita.fs.exists(path) then
-        os.remove(path)
+	local src_profile_data, readError = ReadAll(source_path)
+    if not src_profile_data then
+        gFuncs.Error('Failed to access file: ' .. source_path .. ': ' .. tostring(readError))
+        return false
     end
-
-    local file = io.open(path, 'w');
-    if (file == nil) then
-        gFuncs.Error('Failed to access file: ' .. path);
-        return false;
-    end
-
-	local src_profile_file = io.open(source_path, 'r');
-	local src_profile_data = src_profile_file:read('*all');
-	file:write(src_profile_data);
-	file:close();
-	src_profile_file:close();
-	return true;
+	return AtomicWrite(path, src_profile_data);
 end
 
 
@@ -68,84 +134,24 @@ local SaveChanges = function (path, mod_table, file_type)
         return;
     end
 
-    if ashita.fs.exists(path) then
-        if type(file_type) == "string" and file_type == 'settings' then
-            local file = io.open(path, "r")
-            local file_data = file:read('*all')
-            file:close()
-            file = io.open(path, "w+")
-
-            for i, v in pairs(mod_table) do
-                for n, m in pairs(mod_table[i]) do
-                    if i == 'lang' then
-                        local file_value = file_data:match(tostring(n)..'[%s%S]-[=][%s%S]-[,]')
-                        :gsub(tostring(n)..'[%s%S]-[=][%s%S]-', '')
-                        :gsub('"', '')
-                        :gsub('[,]', '')
-                        :gsub(' ', '')
-
-                        if tostring(file_value) ~= tostring(mod_table[i][n]) then
-                            if type(mod_table[i][n]) == "number" then
-                                file_data = string.gsub(file_data, tostring(n)..'[%s%S]-[=][%s%S]-[,]', tostring(n)..' = '..tostring(mod_table[i][n])..',', 1)
-                            elseif type(mod_table[i][n]) == "string" then
-                                file_data = string.gsub(file_data, tostring(n)..'[%s%S]-[=][%s%S]-[,]', tostring(n)..' = '..'"'..tostring(mod_table[i][n])..'",', 1)
-                            end
-                        end
-                    elseif i == 'mode' then
-                        local file_value = file_data:match(tostring(n)..'[%s%S]-[=][%s%S]-[,]')
-                        :gsub(tostring(n)..'[%s%S]-[=][%s%S]-', '')
-                        :gsub('[,]', '')
-                        :gsub(' ', '')
-
-                        if file_value ~= tostring(mod_table[i][n]) then
-                            file_data = string.gsub(file_data, tostring(n)..'[%s%S]-[=][%s%S]-[,]\n', tostring(n)..' = '..tostring(mod_table[i][n])..',\n', 1)
-                        end
-                    end
-                end
-            end
-            file:seek("set")
-            file:write(file_data)
-            file:close()
-        elseif type(file_type) == "string" and file_type == 'filters' then
-            local file = io.open(path, "w+")
-
-            file:write('local filters = T{\n')
-            for i, v in pairs(mod_table) do
-                file:write('	'..tostring(i)..' = {\n')
-                for n, m in pairs(mod_table[i]) do
-                    if type(m) == "boolean" then
-                        file:write('		'..tostring(n)..' = '..tostring(m)..',\n')
-                    elseif type(m) == 'table' then
-                        file:write('		'..tostring(n)..' = {\n')
-                        for g, h in pairs(m) do
-                            file:write('		    '..tostring(g)..' = '..tostring(h)..',\n')
-                        end
-                        file:write('		},\n')
-                    end
-                end
-                file:write('	},\n')
-            end
-            file:write('};\n')
-            file:write('\n')
-            file:write('return filters;')
-            file:close()
-        elseif type(file_type) == "string" and file_type == 'colors' then
-            local file = io.open(path, "w+")
-
-            file:write('local colors = T{\n')
-            for i, v in pairs(mod_table) do
-                file:write('    '..tostring(i)..' = '..tostring(v)..',\n')
-            end
-            file:write('};\n')
-            file:write('\n')
-            file:write('return colors;')
-            file:close()
-        end
-        return true
-    else
+    if not ashita.fs.exists(path) then
         gFuncs.Error(('File in "%s" dont exist.'):fmt(path))
         return false
     end
+
+    local variableNames = {
+        settings = 'settings',
+        filters = 'filters',
+        colors = 'colors',
+    }
+    local variableName = variableNames[file_type]
+    if not variableName or type(mod_table) ~= 'table' then
+        return false
+    end
+
+    local fileData = 'local ' .. variableName .. ' = '
+        .. SerializeValue(mod_table, '') .. ';\n\nreturn ' .. variableName .. ';\n'
+    return AtomicWrite(path, fileData)
 end
 
 

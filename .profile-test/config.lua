@@ -1,0 +1,43 @@
+local settings = T{
+	lang = T{
+		object = 1,
+		internal = 2,
+		msg_text = 'en',
+	},
+	mode = T{
+		condensedamage = true,
+		condensetargets = true,
+		cancelmultimsg = true,
+		oxford = true,
+		commamode = false,
+		targetnumber = true,
+		condensetargetname = false,
+		swingnumber = true,
+		sumdamage = true,
+		condensecrits = false,
+		tpstatuses = true,
+		simplify = true,
+		show_debug_messages = false,
+		showpetownernames = false,
+		crafting = false,
+		showblocks = false,
+		showguards = false,
+		showcritws = false,
+		showrollinfo = false,
+	},
+	text = T{
+		line_aoe = 'AOE ${numb} '..string.char(129,168)..' ${target}',
+		line_aoebuff = '${actor} ${abil} '..string.char(129,168)..' ${target} (${status})',
+		line_full = '[${actor}] ${numb} ${abil} '..string.char(129,168)..' ${target}',
+		line_itemnum = '[${actor}] ${abil} '..string.char(129,168)..' ${target} (${numb} ${item2})',
+		line_item = '[${actor}] ${abil} '..string.char(129,168)..' ${target} (${item2})',
+		line_steal = '[${actor}] ${abil} '..string.char(129,168)..' ${target} (${item})',
+		line_noability = '${numb} '..string.char(129,168)..' ${target}',
+		line_noactor = '${abil} ${numb} '..string.char(129,168)..' ${target}',
+		line_nonumber = '[${actor}] ${abil} '..string.char(129,168)..' ${target}',
+		line_notarget = '[${actor}] ${abil} '..string.char(129,168)..' ${number}',
+		line_roll = '${actor} ${abil} '..string.char(129,168)..' ${target} '..string.char(129,170)..' ${number}',
+	},
+};
+
+return settings;

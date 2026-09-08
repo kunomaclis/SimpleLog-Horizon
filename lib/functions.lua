@@ -1,8 +1,3 @@
-local ffi = require("ffi");
-ffi.cdef[[
-    int32_t memcmp(const void* buff1, const void* buff2, size_t count);
-]];
-
 -- Table population for all Skills and Spells
 local PopulateSkills = function()
 	local t1 = {}
@@ -190,24 +185,50 @@ local SearchField = function(message)
     return fieldarr
 end
 
+local missing_filter_rows = {}
+
+local ResetFilterDiagnostics = function()
+    missing_filter_rows = {}
+end
+
 local CheckFilter = function(actor, target, category, msg)
     -- This determines whether the message should be displayed or filtered
     -- Returns true (don't filter) or false (filter), boolean
     if not actor.filter or not target.filter then return false end
 
     local filtertab = (gProfileFilter[actor.filter] and gProfileFilter[actor.filter][target.filter]) or gProfileFilter[actor.filter]
+    if type(filtertab) ~= 'table' then
+        local key = tostring(actor.filter) .. ':' .. tostring(target.filter)
+        if not missing_filter_rows[key] then
+            missing_filter_rows[key] = true
+            gFuncs.Error('Missing filter row: ' .. key)
+        end
+        return true
+    end
+
+    local color = nf(res_actmsg[msg], 'color')
+    local melee = category == 1
+    local ranged = category == 2 or category == 12
+    local items = category == 5
+    local uses = category == 9
+    local damage = color == 'D'
+    local misses = color == 'M'
+    local healing = color == 'H'
+    local readies = msg == 43 or msg == 326 or msg == 675
+    local casting = msg == 3 or msg == 327 or msg == 716
+    local known = melee or ranged or items or uses or damage or misses or healing or readies or casting
 
     if filtertab['all']
-    or category == 1 and filtertab['melee']
-    or category == 2 and filtertab['ranged']
-    or category == 12 and filtertab['ranged']
-    or category == 5 and filtertab['items']
-    or category == 9 and filtertab['uses']
-    or nf(res_actmsg[msg],'color')=='D' and filtertab['damage']
-    or nf(res_actmsg[msg],'color')=='M' and filtertab['misses']
-    or nf(res_actmsg[msg],'color')=='H' and filtertab['healing']
-    or (msg == 43 or msg == 326) and filtertab['readies']
-    or (msg == 3 or msg==327) and filtertab['casting']
+    or melee and filtertab['melee']
+    or ranged and filtertab['ranged']
+    or items and filtertab['items']
+    or uses and filtertab['uses']
+    or damage and filtertab['damage']
+    or misses and filtertab['misses']
+    or healing and filtertab['healing']
+    or readies and filtertab['readies']
+    or casting and filtertab['casting']
+    or not known and filtertab['other']
     then
         return false
     end
@@ -502,6 +523,7 @@ local exports = {
 	ColorIt = ColorIt,
 	Conjunctions = Conjunctions,
 	SearchField = SearchField,
+	ResetFilterDiagnostics = ResetFilterDiagnostics,
 	CheckFilter = CheckFilter,
 	ActorNoun = ActorNoun,
 	PluralActor = PluralActor,

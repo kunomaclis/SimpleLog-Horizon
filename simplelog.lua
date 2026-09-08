@@ -20,10 +20,10 @@
 --]]
 
 addon.name      = 'simplelog';
-addon.author    = 'Created by Byrth, Ported by Spiken, Updated by Bee, Amended by Artoo for Horizon';
-addon.version   = '1.2';
+addon.author    = 'Created by Byrth, Ported by Spiken, Updated by Bee, Amended by Artoo for Horizon, Maintained by Kunomaclis';
+addon.version   = '1.2.1';
 addon.desc      = 'Combat log Parser';
-addon.link      = 'https://github.com/Spike2D/SimpleLog';
+addon.link      = 'https://github.com/kunomaclis/SimpleLog-Horizon';
 
 require('common');
 require('lib\\constants');
