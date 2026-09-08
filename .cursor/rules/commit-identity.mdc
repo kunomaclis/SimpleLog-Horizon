@@ -1,0 +1,13 @@
+---
+description: Keep repository authorship under the kunomaclis alias
+alwaysApply: true
+---
+
+# Commit Identity
+
+- Use `kunomaclis <21345856+kunomaclis@users.noreply.github.com>` as both author and committer for all new or rewritten commits.
+- Never place a personal or company email address in commits, release metadata, documentation, or pull-request content.
+- Before pushing, verify every outgoing commit's author and committer identity.
+- Do not use a GitHub-generated merge or squash commit unless its resulting identity is known to use the noreply address.
+- After merging, verify the commit stored on the remote default branch.
+- Use `Kunomaclis` for visible maintainer attribution and link this fork where project metadata requests a repository URL.
