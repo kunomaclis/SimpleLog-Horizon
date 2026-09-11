@@ -6,8 +6,24 @@ local function ResetActionState()
     simplelog_recent_actions = {};
 end
 
+local function TracePreservedTelegraphs(act, actor, only_target, outcome)
+    local parsed_actor = actor
+    if not parsed_actor.filter and act.actor_id then
+        parsed_actor = gActionHandlers.ActorParse(act.actor_id)
+    end
+    local targets = only_target and {only_target} or act.targets or {}
+    for _, target in ipairs(targets) do
+        local parsed_target = target.target and target.target[1]
+            or gActionHandlers.ActorParse(target.server_id)
+        for _, action in ipairs(target.actions or {}) do
+            gFuncs.TrackTelegraphActor(parsed_actor, parsed_target, action.message)
+            gFuncs.TraceTelegraph(parsed_actor, parsed_target, action.message, outcome)
+        end
+    end
+end
+
 local function ShouldSkipDuplicateAction(act, target, action, kind)
-    local now = os.clock();
+    local subsecond_now = os.clock();
 
     local key = table.concat({
         tostring(kind or 'main'),
@@ -25,14 +41,15 @@ local function ShouldSkipDuplicateAction(act, target, action, kind)
         tostring(action.spike_effect_param or 0),
     }, '|');
 
-    if simplelog_recent_actions[key] and (now - simplelog_recent_actions[key]) < simplelog_dedupe_window then
+    if simplelog_recent_actions[key] and (subsecond_now - simplelog_recent_actions[key]) < simplelog_dedupe_window then
+        gFuncs.TraceTelegraph(act.actor, target, action.message, 'deduplicated')
         return true;
     end
 
-    simplelog_recent_actions[key] = now;
+    simplelog_recent_actions[key] = subsecond_now;
 
     for k, v in pairs(simplelog_recent_actions) do
-        if (now - v) > 5 then
+        if (subsecond_now - v) > 5 then
             simplelog_recent_actions[k] = nil;
         end
     end
@@ -61,16 +78,22 @@ actionhandlers.parse_action_packet = function(act)
     -- Constructing table from act to work with, gathering info
 	act.actor = gActionHandlers.ActorParse(act.actor_id)
     if not act.actor.filter then
+        TracePreservedTelegraphs(act, act.actor, nil, 'preserved:unresolved-actor')
         act.skip_rewrite = true
         return act
     end
 
+    local has_unresolved_target = false
     for _, target in ipairs(act.targets) do
         target.target = {gActionHandlers.ActorParse(target.server_id)}
         if not target.target[1].filter then
-            act.skip_rewrite = true
-            return act
+            has_unresolved_target = true
         end
+    end
+    if has_unresolved_target then
+        TracePreservedTelegraphs(act, act.actor, nil, 'preserved:unresolved-target')
+        act.skip_rewrite = true
+        return act
     end
 
     act.action = gActionHandlers.SpellParse(act)
@@ -111,7 +134,10 @@ actionhandlers.parse_action_packet = function(act)
                 if m.has_spike_effect then
                     m.spike_effect_number = 1
                 end
-                if not gFuncs.CheckFilter(act.actor, v.target[1], act.category, m.message) then
+                gFuncs.TrackTelegraphActor(act.actor, v.target[1], m.message)
+                local allowed, filter_reason = gFuncs.CheckFilter(act.actor, v.target[1], act.category, m.message)
+                if not allowed then
+                    gFuncs.TraceTelegraph(act.actor, v.target[1], m.message, 'filtered:'..filter_reason)
                     m.message = 0
                     m.add_effect_message = 0
                 end
@@ -184,7 +210,10 @@ actionhandlers.parse_action_packet = function(act)
             if res_actmsg[tempact.add_effect_message] then tempact.add_effect_fields = gFuncs.SearchField(res_actmsg[tempact.add_effect_message][gProfileSettings.lang.msg_text]) end
             if res_actmsg[tempact.spike_effect_message] then tempact.spike_effect_fields = gFuncs.SearchField(res_actmsg[tempact.spike_effect_message][gProfileSettings.lang.msg_text]) end
 
-            if not gFuncs.CheckFilter(act.actor, v.target[1], act.category, tempact.message) then
+            gFuncs.TrackTelegraphActor(act.actor, v.target[1], tempact.message)
+            local allowed, filter_reason = gFuncs.CheckFilter(act.actor, v.target[1], act.category, tempact.message)
+            if not allowed then
+                gFuncs.TraceTelegraph(act.actor, v.target[1], tempact.message, 'filtered:'..filter_reason)
                 tempact.message = 0
                 tempact.add_effect_message = 0
             end
@@ -449,6 +478,7 @@ actionhandlers.parse_action_packet = function(act)
 					else
 						AshitaCore:GetChatManager():AddChatMessage(color, false, message)
 					end
+                    gFuncs.TraceTelegraph(act.actor, v.target[1], m.message, 'emitted')
 				end
                 if not non_block_messages:contains(m.message) then
                     m.message = 0
@@ -1007,6 +1037,9 @@ actionhandlers.ActorParse = function (actor_id)
                         owner_name = gProfileSettings.mode.showpetownernames and ' ('..gFuncs.ColorIt(v.mob.Name, gProfileColor[owner or typ])..') '
                         break
                     end
+                end
+                if owner == 'other' then
+                    gFuncs.ReportAmbiguousEntity(actor_table)
                 end
             else
                 typ = 'mob'

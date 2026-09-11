@@ -91,6 +91,78 @@ local filter_info = {
     }
 };
 
+local function HasNestedFilters(filters)
+    for _, value in pairs(filters) do
+        if type(value) == 'table' then
+            return true
+        end
+    end
+    return false
+end
+
+local target_labels = {
+    me = 'You',
+    party = 'Party Members and Their Pets',
+    alliance = 'Alliance Members and Their Pets',
+    others = 'Players Outside Your Group',
+    my_pet = 'Your Pet',
+    my_fellow = 'Your Fellow',
+    other_pets = 'Pets Outside Your Group',
+    enemies = 'Claimed Enemies',
+    monsters = 'Unclaimed Monsters',
+}
+
+local function CopyFlatFilters(filters)
+    local copy = {}
+    for key, value in pairs(filters) do
+        if type(value) ~= 'table' then
+            copy[key] = value
+        end
+    end
+    return copy
+end
+
+local function EnableTargetSpecificOtherPets()
+    local flat = gProfileFilter.other_pets
+    local nested = {}
+    for _, target_label in ipairs(filter_info.filter_categories) do
+        local target_key = target_label:lower():gsub(' ', '_')
+        nested[target_key] = CopyFlatFilters(flat)
+    end
+    gProfileFilter.other_pets = nested
+end
+
+local function RenderNestedFilters(actor_key, actor_label)
+    for _, target_label in ipairs(filter_info.filter_categories) do
+        local target_key = target_label:lower():gsub(' ', '_')
+        local row = gProfileFilter[actor_key][target_key]
+        if type(row) == 'table' then
+            if imgui.Checkbox(('##%s_%s_all'):fmt(actor_key, target_key), {row.all == true}) then
+                row.all = not row.all
+            end
+            imgui.SameLine()
+            imgui.TextColored(theme.header_text_col,
+                ('%s targeting %s: All Messages'):fmt(actor_label, target_labels[target_key]))
+            imgui.TextColored(theme.desc_text_col,
+                ('Filter all messages from %s when targeting %s.'):fmt(actor_label, target_labels[target_key]))
+
+            if not row.all then
+                for _, filter_label in ipairs(filter_info.filter_order) do
+                    local filter_key = filter_label:lower()
+                    imgui.TextColored(theme.header_text_col, '\xef\x8c\x8b')
+                    imgui.SameLine()
+                    if imgui.Checkbox(('##%s_%s_%s'):fmt(actor_key, target_key, filter_key),
+                        {row[filter_key] == true}) then
+                        row[filter_key] = not row[filter_key]
+                    end
+                    imgui.SameLine()
+                    imgui.TextColored(theme.header_text_col, filter_label)
+                end
+            end
+        end
+    end
+end
+
 local color_info = {
     color_order = {
         'mob',
@@ -462,6 +534,15 @@ ui.render_config = function(toggle)
                     imgui.TextColored(theme.desc_text_col, 'Profile: ')
                     imgui.SameLine()
                     imgui.TextColored(theme.button_create_filt, gStatus.CurrentFilters)
+                    if gStatus.FilterWarning then
+                        imgui.TextColored(theme.button_test_colors,
+                            ('Could not load %s. You are editing %s instead.')
+                                :fmt(gStatus.FilterWarning.Profile, gStatus.CurrentFilters))
+                        imgui.TextColored(theme.desc_text_col,
+                            'Reason: ' .. gStatus.FilterWarning.Reason)
+                        imgui.TextColored(theme.desc_text_col,
+                            'The profile that could not be loaded will not be changed.')
+                    end
                     imgui.PushStyleColor(ImGuiCol_Button, theme.button_create_filt)
                     imgui.PushStyleColor(ImGuiCol_ButtonHovered, theme.button_hov_col)
                     imgui.PushStyleColor(ImGuiCol_ButtonActive, theme.button_act_col)
@@ -665,25 +746,38 @@ ui.render_config = function(toggle)
                             end
                             imgui.NewLine()
 
-                            local others_other_pets = imgui.Checkbox('##others_other_pets', {gProfileFilter.other_pets.all})
-                            if others_other_pets then
-                                gProfileFilter.other_pets.all = not gProfileFilter.other_pets.all
-                            end
-                            imgui.SameLine()
-                            imgui.TextColored(theme.header_text_col, 'Other Pets: All Messages')
-                            imgui.TextColored(theme.desc_text_col, 'Filter all messages from other Pets')
-
-                            local other_pets_checkboxes = {}
-                            if not gProfileFilter.other_pets.all then
-                                for i, v in ipairs(filter_info.filter_order) do
-                                    imgui.TextColored(theme.header_text_col, '\xef\x8c\x8b')
-                                    imgui.SameLine()
-                                    other_pets_checkboxes[i] = imgui.Checkbox(('##other_pets_%s'):fmt(v), {gProfileFilter.other_pets[v:lower()] == true})
-                                    if other_pets_checkboxes[i] then
-                                        gProfileFilter.other_pets[v:lower()] = not gProfileFilter.other_pets[v:lower()]
+                            if HasNestedFilters(gProfileFilter.other_pets) then
+                                imgui.TextColored(theme.desc_text_col,
+                                    'Pets outside your group are configured separately based on who they target.')
+                                RenderNestedFilters('other_pets', 'Pets Outside Your Group')
+                            else
+                                imgui.TextColored(theme.desc_text_col,
+                                    'These settings currently apply no matter who the pet outside your group targets.')
+                                local convert = imgui.Button('Use Separate Settings Based on Target##other_pets_nested')
+                                imgui.TextColored(theme.desc_text_col,
+                                    'Your current choices will be copied to every target. Nothing changes on disk until Save Changes.')
+                                if convert then
+                                    EnableTargetSpecificOtherPets()
+                                else
+                                    local others_other_pets = imgui.Checkbox('##others_other_pets', {gProfileFilter.other_pets.all})
+                                    if others_other_pets then
+                                        gProfileFilter.other_pets.all = not gProfileFilter.other_pets.all
                                     end
                                     imgui.SameLine()
-                                    imgui.TextColored(theme.header_text_col, tostring(v))
+                                    imgui.TextColored(theme.header_text_col, 'Pets Outside Your Group: All Messages')
+                                    imgui.TextColored(theme.desc_text_col, 'Filter all messages from pets outside your party and alliance.')
+
+                                    if not gProfileFilter.other_pets.all then
+                                        for _, v in ipairs(filter_info.filter_order) do
+                                            imgui.TextColored(theme.header_text_col, '\xef\x8c\x8b')
+                                            imgui.SameLine()
+                                            if imgui.Checkbox(('##other_pets_%s'):fmt(v), {gProfileFilter.other_pets[v:lower()] == true}) then
+                                                gProfileFilter.other_pets[v:lower()] = not gProfileFilter.other_pets[v:lower()]
+                                            end
+                                            imgui.SameLine()
+                                            imgui.TextColored(theme.header_text_col, tostring(v))
+                                        end
+                                    end
                                 end
                             end
                             imgui.EndTabItem()
@@ -723,7 +817,9 @@ ui.render_config = function(toggle)
                         end
                         if imgui.BeginTabItem('Monsters') then
                             imgui.TextColored(theme.header_text_col, 'Monsters:')
-                            imgui.TextColored(theme.desc_text_col, ' NPC not claimed to your party is doing something with one of the below targets:')
+                            imgui.TextColored(theme.desc_text_col, 'NPCs not claimed to your group, organized by who they target.')
+                            imgui.TextColored(theme.desc_text_col,
+                                'Readying and casting messages from unidentified NPCs use these settings when they target your group or you are fighting them.')
 
                             local monsters_checkboxes = T{all = {}, internal = {}}
                             local monsters_index = 1
@@ -808,7 +904,7 @@ ui.render_config = function(toggle)
             imgui.EndChild()
             imgui.PopStyleColor()
             if imgui.Button('\xef\x95\xaf Save Changes', {imgui.GetWindowWidth()-16, 20}) then
-                if not static_config then
+                if not static_config and not gStatus.FilterSavingDisabled then
                     ui.save_changes()
                 else
                     gFuncs.Error('Saving is Disabled.')
