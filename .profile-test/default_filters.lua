@@ -80,12 +80,26 @@ local function monster_targets()
 		me = targeting_me(),
 		my_pet = targeting_my_pet(),
 		monsters = telegraphs_only(),
-		party = hide_all(),
-		alliance = hide_all(),
+		party = telegraphs_only(),
+		alliance = telegraphs_only(),
 		others = hide_all(),
-		my_fellow = hide_all(),
+		my_fellow = targeting_my_pet(),
 		other_pets = hide_all(),
 		enemies = hide_all(),
+	};
+end
+
+local function ambiguous_pet_targets()
+	return {
+		me = targeting_me(),
+		my_pet = targeting_my_pet(),
+		party = telegraphs_only(),
+		alliance = telegraphs_only(),
+		others = hide_all(),
+		my_fellow = targeting_my_pet(),
+		other_pets = hide_all(),
+		enemies = hide_all(),
+		monsters = hide_all(),
 	};
 end
 
@@ -108,7 +122,7 @@ local filters = T{
 	others = hide_all(),
 	my_pet = my_pet_without_misses(),
 	my_fellow = hide_all(),
-	other_pets = hide_all(),
+	other_pets = ambiguous_pet_targets(),
 	enemies = enemy_targets(),
 	monsters = monster_targets(),
 };
