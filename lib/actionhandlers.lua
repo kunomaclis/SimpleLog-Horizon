@@ -2,6 +2,10 @@ local actionhandlers = {};
 local simplelog_recent_actions = {};
 local simplelog_dedupe_window = 1.0;
 
+local function ResetActionState()
+    simplelog_recent_actions = {};
+end
+
 local function ShouldSkipDuplicateAction(act, target, action, kind)
     local now = os.clock();
 
@@ -41,6 +45,7 @@ actionhandlers.parse_action_packet = function(act)
     if not Self then
         Self = GetPlayerEntity()
         if not Self then
+            act.skip_rewrite = true
             return act
         end
     end
@@ -48,12 +53,26 @@ actionhandlers.parse_action_packet = function(act)
     if not SelfPlayer then
         SelfPlayer = AshitaCore:GetMemoryManager():GetPlayer()
         if not SelfPlayer then
+            act.skip_rewrite = true
             return act
         end
     end
 
     -- Constructing table from act to work with, gathering info
 	act.actor = gActionHandlers.ActorParse(act.actor_id)
+    if not act.actor.filter then
+        act.skip_rewrite = true
+        return act
+    end
+
+    for _, target in ipairs(act.targets) do
+        target.target = {gActionHandlers.ActorParse(target.server_id)}
+        if not target.target[1].filter then
+            act.skip_rewrite = true
+            return act
+        end
+    end
+
     act.action = gActionHandlers.SpellParse(act)
     act.actor.name = act.actor and act.actor.name and string.gsub(act.actor.name,'[- ]', {['-'] = string.char(0x81,0x7C), [' '] = string.char(0x81,0x3F)}) --fix for ffxi chat splits on trusts with - and spaces
     targets_condensed = false
@@ -64,8 +83,6 @@ actionhandlers.parse_action_packet = function(act)
     end
 
     for i, v in ipairs(act.targets) do
-        v.target = {}
-        v.target[1] = gActionHandlers.ActorParse(v.server_id)
         if #v.actions > 1 then
             for n, m in ipairs(v.actions) do
                 if res_actmsg[m.message] then m.fields = gFuncs.SearchField(res_actmsg[m.message][gProfileSettings.lang.msg_text]) end
@@ -588,7 +605,7 @@ end
 actionhandlers.ActToString = function(original,act)
     if type(act) ~= 'table' then return act end
     
-    function assemble_bit_packed(init,val,initial_length,final_length)
+    local function assemble_bit_packed(init,val,initial_length,final_length)
         if not init then return init end
         
         if type(val) == 'boolean' then
@@ -933,7 +950,7 @@ actionhandlers.ActorParse = function (actor_id)
     local actor_name, typ, dmg, owner, filt, owner_name
 
     if actor_table == nil then
-        return {name= nil, id=nil, is_npc=nil, type='debug', owner=nil, owner_name=nil, race=nil}
+        return {name=nil, id=actor_id, is_npc=nil, type='debug', owner=nil, owner_name='', race=nil}
         --return {name= ('{Debug ID: %s}'):fmt(actor_id), id= '{DebugID}', is_npc= true, type= 'debug', damage= 'otherdmg', filter= 'others', owner= 'other', owner_name= '{Owner}', race= 0}
     end
 
@@ -996,13 +1013,15 @@ actionhandlers.ActorParse = function (actor_id)
                 filt = 'monsters'
                 dmg = 'mobdmg'
 
-                if gProfileFilter.enemies and SelfPlayer then
-                    for i,v in pairs(SelfPlayer:GetBuffs()) do
-                        if domain_buffs:contains(v) then
-                            -- If you are in Domain Invasion, or a Reive, or various other places
-                            -- then all monsters should be considered enemies.
-                            filt = 'enemies'
-                            break
+                if gProfileFilter.enemies then
+                    if SelfPlayer then
+                        for i,v in pairs(SelfPlayer:GetBuffs()) do
+                            if domain_buffs:contains(v) then
+                                -- If you are in Domain Invasion, or a Reive, or various other places
+                                -- then all monsters should be considered enemies.
+                                filt = 'enemies'
+                                break
+                            end
                         end
                     end
 
@@ -1256,5 +1275,7 @@ actionhandlers.GetPrefix = function (category, effect, message, unknown, reactio
                     ..(reaction_lookup == 3 and T{3,4,6,11,13,14,15}:contains(category) and 'Parried! ' or '') --Unused? They are send the same as missed
     return prefix
 end
+
+actionhandlers.ResetActionState = ResetActionState;
 
 return actionhandlers;
