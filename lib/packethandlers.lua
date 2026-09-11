@@ -6,6 +6,29 @@ local packethandlers = {};
 local last_chunk_buffer;
 local reference_buffer = T{};
 local action_errors = {};
+local action_error_count = 0;
+
+local function has_packet_data(e, minimum)
+    return type(e.data) == 'string' and #e.data >= minimum
+end
+
+local function reset_zone_state()
+    common_nouns = T{};
+    plural_entities = T{};
+    multi_targs = {};
+    multi_actor = {};
+    multi_msg = {};
+    parse_quantity = false;
+    item_quantity = {id = 0, count = ''};
+    Self = nil;
+    SelfPlayer = nil;
+    last_chunk_buffer = nil;
+    reference_buffer = T{};
+    action_errors = {};
+    action_error_count = 0;
+    gActionHandlers.ResetActionState();
+    gFuncs.ResetFilterDiagnostics();
+end
 
 local function report_action_error(err, e)
     local message = tostring(err);
@@ -16,6 +39,12 @@ local function report_action_error(err, e)
         and gProfileSettings.mode.show_debug_messages;
 
     if not previous or (debug_enabled and now - previous >= 5) then
+        if not previous and action_error_count >= 128 then
+            return;
+        end
+        if not action_errors[message] then
+            action_error_count = action_error_count + 1;
+        end
         action_errors[message] = now;
         local details = debug_enabled
             and (' [size=%s, chunk=%s]'):fmt(tostring(e.size), tostring(e.chunk_size))
@@ -81,6 +110,10 @@ local function record_packets(e)
 end
 
 packethandlers.HandleIncoming0x00A = function(e)
+    if not has_packet_data(e, 0xB5) then
+        return
+    end
+
     local id = struct.unpack('L', e.data, 0x04 + 1);
     local name = struct.unpack('c16', e.data, 0x84 + 1);
     local i,j = string.find(name, '\0');
@@ -127,12 +160,19 @@ packethandlers.HandleIncoming0x28 = function(e)
     end
 	act_mod.size = e.data_modified:byte(5)
 
-	return gActionHandlers.ActToString(e.data, gActionHandlers.parse_action_packet(act_org, act_mod))
+    local parsed = gActionHandlers.parse_action_packet(act_org, act_mod)
+    if parsed.skip_rewrite then
+        return e.data
+    end
+	return gActionHandlers.ActToString(e.data, parsed)
 end
 
 packethandlers.HandleIncomingPacket = function(e)
 	record_packets(e)
-	if (e.id == 0x00A) then
+    if e.id == 0x00B then
+        reset_zone_state();
+        return;
+	elseif (e.id == 0x00A) then
 		gPacketHandlers.HandleIncoming0x00A(e);
     elseif not gProfileSettings or not gProfileFilter or not gProfileColor then
         return
@@ -159,7 +199,7 @@ packethandlers.HandleIncomingPacket = function(e)
     end
 
 ------- ITEM QUANTITY -------
-    if (e.id == 0x020 and parse_quantity) then
+    if (e.id == 0x020 and parse_quantity and has_packet_data(e, 0x0E)) then
         local item = struct.unpack('H', e.data, 0x0D)
         local count = struct.unpack('I', e.data, 0x05)
         if item == 0 then
@@ -170,7 +210,7 @@ packethandlers.HandleIncomingPacket = function(e)
         end
 
 ------- NOUNS AND PLURAL ENTITIES ------- 
-    elseif e.id == 0x00E then
+    elseif e.id == 0x00E and has_packet_data(e, 0x28) then
         local mob_id = struct.unpack('I', e.data, 0x05)
         local mask = struct.unpack('B', e.data, 0x0B)
         local chat_info = struct.unpack('B', e.data, 0x28)
@@ -188,22 +228,8 @@ packethandlers.HandleIncomingPacket = function(e)
                 end
             end
         end
-    elseif e.id == 0x00B then -- Reset tables on Zoning
-        common_nouns = T{}
-        plural_entities = T{}
-        multi_targs = {}
-        multi_actor = {}
-        multi_msg = {}
-        parse_quantity = false
-        item_quantity = {id = 0, count = ''}
-        Self = nil
-        SelfPlayer = nil
-
 ------- ACTION MESSAGE -------
-    elseif e.id == 0x29 then
-    -- Action message duplicates are safer to block.
-    if check_duplicates(e, true) then return end
-
+    elseif e.id == 0x29 and has_packet_data(e, 0x1A) then
         local am = {}
         am.actor_id = struct.unpack('I', e.data, 0x05)
         am.target_id = struct.unpack('I', e.data, 0x09)
@@ -216,6 +242,11 @@ packethandlers.HandleIncomingPacket = function(e)
 
         local actor = gActionHandlers.ActorParse(am.actor_id)
         local target = gActionHandlers.ActorParse(am.target_id)
+        if not actor.filter or not target.filter then
+            return
+        end
+        -- Action message duplicates are safer to block.
+        if check_duplicates(e, true) then return end
         local actor_article = ''
         if gProfileSettings.lang.msg_text ~= 'jp' then
             actor_article = common_nouns:contains(am.actor_id) and 'The ' or ''
@@ -394,7 +425,7 @@ packethandlers.HandleIncomingPacket = function(e)
         end
 
 ------------ SYNTHESIS ANIMATION --------------
-    elseif e.id == 0x030 and gProfileSettings.mode.crafting then
+    elseif e.id == 0x030 and gProfileSettings.mode.crafting and has_packet_data(e, 0x0D) then
         local target = GetEntity(AshitaCore:GetMemoryManager():GetTarget():GetTargetIndex(0))
         local target_id = AshitaCore:GetMemoryManager():GetTarget():GetServerId(0)
         if not Self then
@@ -414,7 +445,7 @@ packethandlers.HandleIncomingPacket = function(e)
                 AshitaCore:GetChatManager():AddChatMessage(8, false, 'Craftmod: Unhandled result '..tostring(result))
             end
         end
-    elseif e.id == 0x06F and gProfileSettings.mode.crafting then
+    elseif e.id == 0x06F and gProfileSettings.mode.crafting and has_packet_data(e, 0x06) then
         if e.data:byte(5) == 0 or e.data:byte(5) == 12 then
             local result = e.data:byte(6)
             if result == 1 then
@@ -427,7 +458,7 @@ packethandlers.HandleIncomingPacket = function(e)
         end
 
     ------------- JOB INFO ----------------
-    elseif e.id == 0x01B then
+    elseif e.id == 0x01B and has_packet_data(e, 0x09) then
         local new_job = AshitaCore:GetResourceManager():GetString("jobs.names_abbr", e.data:byte(9))
         local old_job = AshitaCore:GetResourceManager():GetString("jobs.names_abbr", gStatus.PlayerJob)
         if new_job ~= old_job then
